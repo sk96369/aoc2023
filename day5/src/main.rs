@@ -48,7 +48,6 @@ fn read_input(filename: &str) -> (Vec<u64>, Maps) {
             }
         }
     });
-
     //sort the maps by the start of the source range
     maps.iter_mut().for_each(|c| c.sort_by_key(|k| k.1));
     (seeds, maps)
@@ -66,8 +65,6 @@ fn find_location(seed: &u64, maps: &Maps) -> u64 {
             }
         });
         path.push(val);
-        // source numbers that aren't mapped correspond to the same destination
-        // number, so we don't need to do anything here
     });
     val
 }
@@ -166,7 +163,6 @@ fn main() {
     let now = Instant::now();
 
     //part2 
-    //___________________________REMOVE
     let seeds = get_seed_ranges(&seeds);
     let mut count = 1;
 
