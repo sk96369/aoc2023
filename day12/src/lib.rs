@@ -23,14 +23,24 @@ impl FoldedArrangement {
 enum Spring {
     Broken(usize),
     Unknown(usize),
+    Op,
 }
 
 fn get_permutations(shapes: &Vec<usize>, holes: &Vec<Spring>) -> Result<usize, ()> {
+    let mut holes_it = holes.iter();
     if let Some(s) = shapes.first() {
-        if let Some(h) = holes.first() {
+        if let Some(h) = holes_it.next() {
             match h {
-                Broken(l) => l <= h {
-                    get_permutations(shapes[1..], vec![
+                Broken(b) => {
+                    if b == s {
+                        match get_permutations(shapes[1..], holes[1..]) {
+                            Result::Ok(v) => v,
+                            Err(_) => Err(()),
+                        }
+                    } else if s < h {
+                        Err(())
+                    } else {
+                        if 
 
 
 impl Arrangement {
@@ -105,6 +115,8 @@ impl Arrangement {
 fn fits(sections: &Vec<usize>, patterns: &Vec<usize>) -> bool {
     if let Some(p) = patterns.last() {
         if let Some(s) = sections.last() {
+            match s {
+
             if p <= s {
                 if 
             } else {
