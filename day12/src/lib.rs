@@ -1,14 +1,20 @@
+pub mod pieces;
+
+#[derive(Debug)]
 pub struct Arrangement {
     pub springs: String,
     pub broken_lengths: Vec<usize>,
 }
 
-pub struct FoldedArrangement {}
+pub struct FoldedArrangement {
+    pub springs: String,
+    pub broken_lengths: Vec<usize>,
+}
 
-impl FoldedArrangement {
-    fn from(line: &str) -> Arrangement {
+impl From<&str> for FoldedArrangement {
+    fn from(line: &str) -> FoldedArrangement {
         let mut split = line.split_terminator(' ');
-        Arrangement {
+        FoldedArrangement {
             springs: {
                 format!("{0}?{0}?{0}?{0}?{0}", split.next().unwrap())
             },
@@ -20,118 +26,6 @@ impl FoldedArrangement {
     }
 }
 
-enum Spring {
-    Broken(usize),
-    Unknown(usize),
-    Op,
-}
-
-fn get_permutations(shapes: &Vec<usize>, holes: &Vec<Spring>) -> Result<usize, ()> {
-    let mut holes_it = holes.iter();
-    if let Some(s) = shapes.first() {
-        if let Some(h) = holes_it.next() {
-            match h {
-                Broken(b) => {
-                    if b == s {
-                        match get_permutations(shapes[1..], holes[1..]) {
-                            Result::Ok(v) => v,
-                            Err(_) => Err(()),
-                        }
-                    } else if s < h {
-                        Err(())
-                    } else {
-                        if 
-
-
-impl Arrangement {
-    fn count_fixes(&self) -> usize {
-        let mut broken_iter = self.broken_lengths.iter();
-        let mut current_pattern = broken_iter.next().unwrap();
-        let mut broken = true;
-        let mut min_sections = 0;
-        let max_sections = self.broken_lengths.len();
-        self.springs.chars().for_each(|c| {
-            if ['#', '?'].contains(&c) {
-                if !broken {
-                    min_sections += 1;
-                    broken = true;
-                }
-            } else if broken {
-                broken = false;
-            }
-        });
-        
-        let mut current_broken = 0;
-
-        let mut unknowns = vec![(vec![0], vec![0])];
-        self.springs.chars().for_each(|c| {
-            if c == '#' {
-                if unknowns.last().unwrap().0.last().unwrap() == &0 {
-                    current_broken += 1;
-                } else {
-                    *unknowns.last_mut().unwrap().0.last().unwrap() += 1;
-                }
-            } else if c == '?' {
-                if current_broken > 0 {
-                    if &current_broken < current_pattern {
-                        current_broken += 1;
-                    } else if &current_broken == current_pattern {
-                        current_broken = 0;
-                        current_pattern = broken_iter.next().unwrap();
-                    } else {
-                        //IF NO WORK TRY DIS:
-                        //IF NO WORK BECAUSE THE PATTERNS DONT LINE UP,
-                        //CHECK UNKNOWN'S TOP'S BOTH SIDES MATCHING AT THIS POINT
-                        while &current_broken > current_pattern {
-                            unknowns.last().unwrap().1.push(*current_pattern);
-                            current_pattern = broken_iter.next().unwrap();
-                        }
-                    }
-                } else {
-                }
-            } else {
-                if unknowns.last().unwrap().0.last().unwrap() > &0 {
-                    if current_broken > 0 {
-                        if current_broken + unknowns.last().unwrap().0
-                            .last().unwrap() == current_broken {
-                            
-
-                    unknowns.push((vec![], vec![]))
-                }
-                if current_broken > 0 {
-                    if &current_broken == current_pattern {
-                        current_pattern = broken_iter.next().unwrap();
-                    } else 
-                    current_broken = 0;
-                    unknown = 0;
-                    current_pattern = broken_iter.next().unwrap();
-                }
-            }
-        });
-    }
-}
-
-//Checks if the sections can fit the patterns
-fn fits(sections: &Vec<usize>, patterns: &Vec<usize>) -> bool {
-    if let Some(p) = patterns.last() {
-        if let Some(s) = sections.last() {
-            match s {
-
-            if p <= s {
-                if 
-            } else {
-                fits(
-        } else {
-            false
-        }
-    } else {
-        true
-    }
-}
-
-
-    
-
 impl From<&str> for Arrangement {
     fn from(line: &str) -> Arrangement {
         let mut split = line.split_terminator(' ');
@@ -139,6 +33,15 @@ impl From<&str> for Arrangement {
             springs: split.next().unwrap().chars().collect(),
             broken_lengths: split.next().unwrap().split_terminator(',')
                 .filter_map(|c| c.parse::<usize>().ok()).collect(),
+        }
+    }
+}
+
+impl From<FoldedArrangement> for Arrangement {
+    fn from(other: FoldedArrangement) -> Arrangement {
+        Arrangement {
+            springs: other.springs,
+            broken_lengths: other.broken_lengths,
         }
     }
 }

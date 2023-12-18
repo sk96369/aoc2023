@@ -1,4 +1,6 @@
-use day12::*;
+use std::{sync::{Arc, Mutex}, thread, time::Duration};
+
+use day12::{*, pieces};
 
 fn solve_1(input: String) -> usize {
     let arrangements: Vec<Arrangement> = input.lines()
@@ -8,114 +10,50 @@ fn solve_1(input: String) -> usize {
             None
         })
     .collect();
-
     arrangements.iter().map(|a| {
-        let springs_to_break = a.broken_lengths.iter().sum::<usize>() - 
-            a.springs.chars().filter(|c| c == &'#').count();
-        let unknown_indices: Vec<usize> = a.springs.chars().enumerate()
-            .filter_map(|(i, c)| if c == '?' {
-                Some(i)
-            } else {
-                None
-            })
-        .collect();
-        #[cfg(test)]
-        println!("{:?}", unknown_indices);
-        (0..(2_u32.pow(unknown_indices.len() as u32)) as usize).filter(|p| {
-            let mask = format!("{:b}", p);
-            if mask.chars().filter(|c| c == &'1')
-                .count() == springs_to_break {
-                    #[cfg(test)]
-                    println!("mask: {:?}", mask);
-                    let mut mask_right = mask.chars().map(|c| {
-                        c as u8 - '0' as u8
-                    }).collect::<Vec<u8>>();
-                    let mut mask = vec![
-                        0_u8;
-                        unknown_indices.len() - mask.len()
-                    ];
-                    mask.append(&mut mask_right);
-                    #[cfg(test)]
-                    println!("mask after padding: {:?}", mask);
-                    let mut mask_position = 0;
-                    let candidate = a.springs.chars().map(|c| {
-                        if c == '?' {
-                            if mask[mask_position] == 1 {
-                                mask_position += 1;
-                                '#'
-                            } else {
-                                mask_position += 1;
-                                '.'
-                            }
-                        } else {
-                            c
-                        }
-                    }).collect::<String>();
-                    check_correctness(&candidate, &a.broken_lengths)
-                } else {
-                    false
-                }
-        }).count()
+        let answer = pieces::find_all_permutations(&a.springs.chars().collect::<Vec<char>>()[..], &a.broken_lengths[..]);
+        answer
     }).sum::<usize>()
 }
 
 fn solve_2(input: String) -> usize {
-    let arrangements: Vec<FoldedArrangement> = input.lines()
-        .filter_map(|l| if l != "" {
-            Some(FoldedArrangement::from(l))
+    let arrangements: Vec<Arrangement> = input.lines().filter_map(|l| {
+        if l != "" {
+            Some(Arrangement::from(FoldedArrangement::from(l)))
         } else {
             None
-        })
+        }
+    })
     .collect();
+    let shared_count = Arc::new(Mutex::new(0_usize));
+    let shared_line_counter = Arc::new(Mutex::new(0_usize));
+    let mut handles = vec![];
 
-    arrangements.iter().map(|a| {
-        let springs_to_break = a.broken_lengths.iter().sum::<usize>() - 
-            a.springs.chars().filter(|c| c == &'#').count();
-        let unknown_indices: Vec<usize> = a.springs.chars().enumerate()
-            .filter_map(|(i, c)| if c == '?' {
-                Some(i)
-            } else {
-                None
-            })
-        .collect();
-        #[cfg(test)]
-        println!("{:?}", unknown_indices);
-        (0..(2_u32.pow(unknown_indices.len() as u32)) as usize).filter(|p| {
-            let mask = format!("{:b}", p);
-            if mask.chars().filter(|c| c == &'1')
-                .count() == springs_to_break {
-                    #[cfg(test)]
-                    println!("mask: {:?}", mask);
-                    let mut mask_right = mask.chars().map(|c| {
-                        c as u8 - '0' as u8
-                    }).collect::<Vec<u8>>();
-                    let mut mask = vec![
-                        0_u8;
-                        unknown_indices.len() - mask.len()
-                    ];
-                    mask.append(&mut mask_right);
-                    #[cfg(test)]
-                    println!("mask after padding: {:?}", mask);
-                    let mut mask_position = 0;
-                    let candidate = a.springs.chars().map(|c| {
-                        if c == '?' {
-                            if mask[mask_position] == 1 {
-                                mask_position += 1;
-                                '#'
-                            } else {
-                                mask_position += 1;
-                                '.'
-                            }
-                        } else {
-                            c
-                        }
-                    }).collect::<String>();
-                    check_correctness(&candidate, &a.broken_lengths)
-                } else {
-                    false
-                }
-        }).count()
-    }).sum::<usize>()
+    arrangements.iter().enumerate().for_each(|(_idx, a)| {
+        thread::sleep(Duration::from_secs(8));
+        let shared_count = Arc::clone(&shared_count);
+        let shared_line_counter = Arc::clone(&shared_line_counter);
+        let pieces = a.broken_lengths.clone();
+        let seq = a.springs.chars().collect::<Vec<char>>();
+        let handle = thread::spawn(move || {
+            //println!("{a:?}:");
+            let answer = pieces::find_all_permutations(&seq[..], &pieces[..]);
+            let mut lock = shared_count.lock().unwrap();
+            *lock += answer;
+            let mut lock = shared_line_counter.lock().unwrap();
+            *lock += 1;
+            println!("{}: {answer} ({_idx})", *lock);
+        });
+        handles.push(handle);
+    });
+
+    loop {
+        if *shared_line_counter.lock().unwrap() == 1000 {
+            let sum = *shared_count.lock().unwrap();
+            println!("Done! Answer: {}", sum);
+            return sum;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -124,6 +62,7 @@ mod tests {
     #[test]
     fn test_input_part1() {
         let input = include_str!("testinput.txt").to_owned();
+        #[cfg(test)]
         assert_eq!(solve_1(input), 21);
     }
 
