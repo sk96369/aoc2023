@@ -14,7 +14,6 @@ impl From<&str> for City {
             line.chars().map(|ch| {
                 let new_node = Node {
                     weight: usize::from(ch as u8 - '0' as u8),
-                    node: idx,
                 };
                 idx += 1;
                 new_node
@@ -26,6 +25,18 @@ impl From<&str> for City {
             city: city,
             xlen: xlen,
             goal: idx - 1,
+        }
+    }
+}
+
+impl Direction {
+    fn get_streak(&self) -> usize {
+        use Direction::*;
+        match self {
+            Left(x) => usize::from(*x),
+            Right(x) => usize::from(*x),
+            Up(x) => usize::from(*x),
+            Down(x) => usize::from(*x),
         }
     }
 }
@@ -71,6 +82,7 @@ impl City {
                 }
             },
         };
+        #[cfg(test)]
         if step.position == 20 {
             println!("{:?}", step);
             println!("{:?}", neighbors);
@@ -93,7 +105,6 @@ impl DerefMut for City {
 }
 
 struct Node {
-    node: usize,
     weight: usize,
 }
 
@@ -106,24 +117,29 @@ enum Direction {
 }
 
 fn clumsy_star(city: &City, start: usize, goal: usize) -> usize {
-    let mut dist: Vec<_> = (0..city.len()).map(|_| usize::MAX).collect();
-
+    let mut dist: Vec<(_, usize)> = (0..city.len()).map(|_| (usize::MAX, usize::MAX)).collect();
     let mut paths = BinaryHeap::new();
 
-    dist[start] = 0;
+    dist[start] = (0, 0);
     paths.push(Reverse(Step { cost: 0, position: start, d: Direction::Up(0), visited: vec![0] }));
 
     while let Some(step) = paths.pop() {
         let step = step.0;
-        if step.cost > dist[step.position] { continue; }
+        println!("{}: {}", step.position, step.cost);
+        if step.position == goal {
+            return step.cost;
+        }
 
         city.get_neighbors(&step).into_iter().for_each(|next| {
             let next_cost = step.cost + city[next.0].weight;
             #[cfg(test)]
             println!("{:?} current dir: {:?}",step.visited, step.d);
-            #[cfg(test)]
-            println!("testing: {} + {} = {} < {} (from: ({}, {}) => {}", step.cost, city[next.0].weight, next_cost, dist[next.0], next.0 % city.xlen, next.0 / city.xlen, next_cost < dist[next.0]);
-            if next_cost < dist[next.0] {
+            if !step.visited.contains(&next.0) && (dist[next.0].1 > next.1.get_streak() || dist[next.0].0 > next_cost) {
+                if dist[next.0].0 > next_cost {
+                    dist[next.0].0 = next_cost;
+                    dist[next.0].1 = next.1.get_streak();
+                }
+
                 let mut new_step = Step {
                     d: next.1,
                     visited: step.visited.clone(),
@@ -132,14 +148,13 @@ fn clumsy_star(city: &City, start: usize, goal: usize) -> usize {
                 };
                 new_step.visited.push(next.0);
                 paths.push(Reverse(new_step));
-                dist[next.0] = next_cost;
             }
         });
         #[cfg(test)]
         println!("heap: {:?}\n", paths);
     }
     println!("asd");
-    dist[goal]
+    0
 }
 
 impl PartialOrd for Direction {
@@ -214,7 +229,19 @@ impl PartialOrd for Step {
 }
 
 fn main() {
-    let input = include_str!("testinput.txt");
+    let input = include_str!("input.txt");
     let city = City::from(&input[..]);
     println!("Shortest path to goal: {}", clumsy_star(&city, 0, city.goal));
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_1() {
+        let input = include_str!("testinput.txt");
+        let city = City::from(&input[..]);
+        assert_eq!(clumsy_star(&city, 0, city.goal), 102);
+    }
 }
