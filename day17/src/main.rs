@@ -1,10 +1,23 @@
-use std::{cmp::{Reverse, Ordering}, collections::BinaryHeap, ops::{Deref, DerefMut}};
+use std::{hash::{Hash, Hasher}, cmp::{Reverse, Ordering}, collections::{BinaryHeap, HashMap}, ops::{Deref, DerefMut}, time::Instant};
 
 struct City {
     city: Vec<Node>,
     xlen: usize,
     goal: usize,
 }
+
+impl Clone for Direction {
+    fn clone(&self) -> Direction {
+        use Direction::*;
+        match self {
+            Left(x) => Left(*x),
+            Up(x) => Up(*x),
+            Right(x) => Right(*x),
+            Down(x) => Down(*x),
+        }
+    }
+}
+
 
 impl From<&str> for City {
     fn from(input: &str) -> City {
@@ -38,6 +51,18 @@ impl Direction {
             Up(x) => usize::from(*x),
             Down(x) => usize::from(*x),
         }
+    }
+}
+
+impl Hash for Direction {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        use Direction::*;
+        match self {
+            Up(x) => (0, x),
+            Right(x) => (1, x),
+            Down(x) => (2, x),
+            Left(x) => (3, x),
+        }.hash(state);
     }
 }
 
@@ -82,11 +107,6 @@ impl City {
                 }
             },
         };
-        #[cfg(test)]
-        if step.position == 20 {
-            println!("{:?}", step);
-            println!("{:?}", neighbors);
-        }
         neighbors
     }
 }
@@ -117,44 +137,67 @@ enum Direction {
 }
 
 fn clumsy_star(city: &City, start: usize, goal: usize) -> usize {
-    let mut dist: Vec<(_, usize)> = (0..city.len()).map(|_| (usize::MAX, usize::MAX)).collect();
+    let now = Instant::now();
+    //let mut dist: Vec<(_, usize)> = (0..city.len()).map(|_| (usize::MAX, usize::MAX)).collect();
+    let mut dist: HashMap<(Direction, usize), usize> = HashMap::new();
     let mut paths = BinaryHeap::new();
 
-    dist[start] = (0, 0);
+    dist.insert((Direction::Up(1), 0), 0);
+    dist.insert((Direction::Up(2), 0), 0);
+    dist.insert((Direction::Up(3), 0), 0);
+    dist.insert((Direction::Left(1), 0), 0);
+    dist.insert((Direction::Left(2), 0), 0);
+    dist.insert((Direction::Left(2), 0), 0);
     paths.push(Reverse(Step { cost: 0, position: start, d: Direction::Up(0), visited: vec![0] }));
 
+    let mut lowest_cost = usize::MAX;
+    let mut shortest_path = vec![];
+    let mut max_pos = 0;
     while let Some(step) = paths.pop() {
         let step = step.0;
-        println!("{}: {}", step.position, step.cost);
-        if step.position == goal {
-            return step.cost;
+        if step.position > max_pos {
+            max_pos = step.position;
+            println!("Farthest point: {}, Time elapsed: {}", max_pos, now.elapsed().as_secs());
+        }
+        if step.position == goal && step.cost < lowest_cost {
+            lowest_cost = step.cost;
+            shortest_path = step.visited.iter().map(|v| {
+                (v % city.xlen, v / city.xlen)
+            })
+            .collect();
         }
 
         city.get_neighbors(&step).into_iter().for_each(|next| {
             let next_cost = step.cost + city[next.0].weight;
-            #[cfg(test)]
-            println!("{:?} current dir: {:?}",step.visited, step.d);
-            if !step.visited.contains(&next.0) && (dist[next.0].1 > next.1.get_streak() || dist[next.0].0 > next_cost) {
-                if dist[next.0].0 > next_cost {
-                    dist[next.0].0 = next_cost;
-                    dist[next.0].1 = next.1.get_streak();
+            if let Some(a) = dist.get_mut(&(next.1.clone(), next.0)) {   
+                if *a > next_cost {
+                    let mut new_step = Step {
+                        d: next.1,
+                        visited: step.visited.clone(),
+                        cost: next_cost,
+                        position: next.0,
+                    };
+                    new_step.visited.push(next.0);
+                    paths.push(Reverse(new_step));
+                    *a = next_cost;
                 }
-
+            } else {
                 let mut new_step = Step {
-                    d: next.1,
+                    d: next.1.clone(),
                     visited: step.visited.clone(),
                     cost: next_cost,
                     position: next.0,
                 };
                 new_step.visited.push(next.0);
                 paths.push(Reverse(new_step));
+
+                dist.insert((next.1, next.0), next_cost);
             }
         });
-        #[cfg(test)]
-        println!("heap: {:?}\n", paths);
     }
-    println!("asd");
-    0
+    #[cfg(test)]
+    println!("{:#?}: {}", shortest_path, lowest_cost);
+    lowest_cost
 }
 
 impl PartialOrd for Direction {
@@ -168,6 +211,9 @@ impl PartialOrd for Direction {
             _ => None, 
         }
     }
+}
+
+impl Eq for Direction {
 }
 
 impl PartialEq for Direction {
