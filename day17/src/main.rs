@@ -67,46 +67,55 @@ impl Hash for Direction {
 }
 
 impl City {
-    fn get_neighbors(&self, step: &Step) -> Vec<(usize, Direction)> {
+    fn get_neighbors(&self, step: &Step, crucible: &Crucible) -> Vec<(usize, Direction)> {
         use Direction::*;
         let mut neighbors = vec![];
 
+        let (min_line, max_line) = match crucible {
+            Crucible::Ultra => (4, 10),
+            _ => (0, 3),
+        };
+
         match step.d {
-            Up(_) | Down(_) => {
-                if step.position % self.xlen != 0 {
+            Up(x) | Down(x) => {
+                if x >= min_line && step.position % self.xlen != 0 {
                     neighbors.push((step.position - 1, Left(1)));
                 }
-                if (step.position + 1) % self.xlen != 0 {
+                if x >= min_line && (step.position + 1) % self.xlen != 0 {
                     neighbors.push((step.position + 1, Right(1)));               
                 }
                 if let Up(x) = step.d {
-                    if x < 3 && step.position > self.xlen {
+                    if x < max_line && step.position > self.xlen {
                         neighbors.push((step.position - self.xlen, Up(x + 1)));
                     }
                 } else if let Down(x) = step.d {
-                    if x < 3 && step.position < self.len() - self.xlen {
+                    if x < max_line && step.position < self.len() - self.xlen {
                         neighbors.push((step.position + self.xlen, Down(x + 1)));
                     }
                 }
             },
-            Left(_) | Right(_) => {
-                if step.position > self.xlen {
+            Left(x) | Right(x) => {
+                if x >= min_line && step.position > self.xlen {
                     neighbors.push((step.position - self.xlen, Up(1)));
                 }
-                if step.position < self.len() - self.xlen {
+                if x >= min_line && step.position < self.len() - self.xlen {
                     neighbors.push((step.position + self.xlen, Down(1)));               
                 }
                 if let Left(x) = step.d {
-                    if x < 3 && step.position % self.xlen != 0 {
+                    if x < max_line && step.position % self.xlen != 0 {
                         neighbors.push((step.position - 1, Left(x + 1)));
                     }
                 } else if let Right(x) = step.d {
-                    if x < 3 && (step.position + 1) % self.xlen != 0 {
+                    if x < max_line && (step.position + 1) % self.xlen != 0 {
                         neighbors.push((step.position + 1, Right(x + 1)));
                     }
                 }
             },
         };
+        if step.position == 999999999 {
+            println!("{:?}", step);
+            println!("{:?}", neighbors);
+        }
         neighbors
     }
 }
@@ -136,7 +145,12 @@ enum Direction {
     Right(u8),
 }
 
-fn clumsy_star(city: &City, start: usize, goal: usize) -> usize {
+enum Crucible {
+    Ultra,
+    Normal,
+}
+
+fn clumsy_star(city: &City, start: usize, goal: usize, crucible: Crucible) -> usize {
     let now = Instant::now();
     //let mut dist: Vec<(_, usize)> = (0..city.len()).map(|_| (usize::MAX, usize::MAX)).collect();
     let mut dist: HashMap<(Direction, usize), usize> = HashMap::new();
@@ -148,20 +162,26 @@ fn clumsy_star(city: &City, start: usize, goal: usize) -> usize {
     dist.insert((Direction::Left(1), 0), 0);
     dist.insert((Direction::Left(2), 0), 0);
     dist.insert((Direction::Left(3), 0), 0);
-    paths.push(Reverse(Step { cost: 0, position: start, d: Direction::Up(0), visited: vec![0] }));
-    paths.push(Reverse(Step { cost: 0, position: start, d: Direction::Left(0), visited: vec![0] }));
+    paths.push(Reverse(Step { cost: 0, position: start, d: Direction::Right(0), visited: vec![0] }));
+    paths.push(Reverse(Step { cost: 0, position: start, d: Direction::Down(0), visited: vec![0] }));
 
     let mut lowest_cost = usize::MAX;
     let mut shortest_path = vec![];
     let mut max_pos = 0;
     while let Some(step) = paths.pop() {
+        #[cfg(test)]
+        println!("current: {:#?}", step);
+
         let step = step.0;
         #[cfg(test)]
         if step.position > max_pos {
             max_pos = step.position;
             println!("Farthest point: {}, Time elapsed: {}", max_pos, now.elapsed().as_secs());
         }
-        if step.position == goal {
+        if step.position == goal && step.d.get_streak() > match crucible {
+            Crucible::Ultra => 3,
+            _ => 0,
+        } {
             println!("Time elapsed: {} ms", now.elapsed().as_millis());
             #[cfg(test)]
             step.visited.iter().for_each(|v| {
@@ -172,7 +192,7 @@ fn clumsy_star(city: &City, start: usize, goal: usize) -> usize {
             #[cfg(test)]
             {
                 println!("dist:_____________________________________\\");
-                let mut distvec = vec![usize::MAX;25];
+                let mut distvec = vec![usize::MAX;city.len()];
                 dist.iter().for_each(|d| {
                     if &distvec[d.0.1] > d.1 {
                         distvec[d.0.1] = *d.1;
@@ -190,7 +210,7 @@ fn clumsy_star(city: &City, start: usize, goal: usize) -> usize {
             .collect();
         }
 
-        city.get_neighbors(&step).into_iter().for_each(|next| {
+        city.get_neighbors(&step, &crucible).into_iter().for_each(|next| {
             let next_cost = step.cost + city[next.0].weight;
             if let Some(a) = dist.get_mut(&(next.1.clone(), next.0)) {   
                 if *a > next_cost {
@@ -302,7 +322,9 @@ impl PartialOrd for Step {
 fn main() {
     let input = include_str!("input.txt");
     let city = City::from(&input[..]);
-    println!("Shortest path to goal: {}", clumsy_star(&city, 0, city.goal));
+    println!("Part 1 shortest path to goal: {}", clumsy_star(&city, 0, city.goal, Crucible::Normal));
+    println!("Part 2 shortest path to goal: {}", clumsy_star(&city, 0, city.goal, Crucible::Ultra));
+
 }
 
 #[cfg(test)]
@@ -313,22 +335,20 @@ mod test {
     fn test_1() {
         let input = include_str!("testinput.txt");
         let city = City::from(&input[..]);
-        assert_eq!(clumsy_star(&city, 0, city.goal), 102);
+        assert_eq!(clumsy_star(&city, 0, city.goal, Crucible::Normal), 102);
     }
 
     #[test]
-    fn hashtest() {
-        let input = "94128\n29182\n12345\n93885\n22841";
-        let city = City::from(input);
-        let answer = clumsy_star(&city, 0, city.goal);
-        assert_eq!(1, 0);
-    }
-
-    #[test]
-    fn longtest() {
-        let input = include_str!("smallinput.txt");
+    fn test_ultra() {
+        let input = include_str!("testinput.txt");
         let city = City::from(&input[..]);
-        let answer = clumsy_star(&city, 0, city.goal);
-        println!("{}", answer);
+        assert_eq!(clumsy_star(&city, 0, city.goal, Crucible::Ultra), 94);
+    }
+
+    #[test]
+    fn test_mini() {
+        let input = "127589\n199999\n198565\n194876\n198475\n111111";
+        let city = City::from(input);
+        assert_eq!(clumsy_star(&city, 0, city.goal, Crucible::Ultra), 10);
     }
 }
