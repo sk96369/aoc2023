@@ -147,19 +147,42 @@ fn clumsy_star(city: &City, start: usize, goal: usize) -> usize {
     dist.insert((Direction::Up(3), 0), 0);
     dist.insert((Direction::Left(1), 0), 0);
     dist.insert((Direction::Left(2), 0), 0);
-    dist.insert((Direction::Left(2), 0), 0);
+    dist.insert((Direction::Left(3), 0), 0);
     paths.push(Reverse(Step { cost: 0, position: start, d: Direction::Up(0), visited: vec![0] }));
+    paths.push(Reverse(Step { cost: 0, position: start, d: Direction::Left(0), visited: vec![0] }));
 
     let mut lowest_cost = usize::MAX;
     let mut shortest_path = vec![];
     let mut max_pos = 0;
     while let Some(step) = paths.pop() {
         let step = step.0;
+        #[cfg(test)]
         if step.position > max_pos {
             max_pos = step.position;
             println!("Farthest point: {}, Time elapsed: {}", max_pos, now.elapsed().as_secs());
         }
-        if step.position == goal && step.cost < lowest_cost {
+        if step.position == goal {
+            println!("Time elapsed: {} ms", now.elapsed().as_millis());
+            #[cfg(test)]
+            step.visited.iter().for_each(|v| {
+                let a = v % city.xlen;
+                let b = v / city.xlen;
+                println!("{a} {b}");
+            });
+            #[cfg(test)]
+            {
+                println!("dist:_____________________________________\\");
+                let mut distvec = vec![usize::MAX;25];
+                dist.iter().for_each(|d| {
+                    if &distvec[d.0.1] > d.1 {
+                        distvec[d.0.1] = *d.1;
+                    }
+                });
+                distvec.iter().enumerate().for_each(|(idx, d)| {
+                    println!("({} {}) = {}", idx % city.xlen, idx / city.xlen, d)
+                });
+            };
+            return step.cost;
             lowest_cost = step.cost;
             shortest_path = step.visited.iter().map(|v| {
                 (v % city.xlen, v / city.xlen)
@@ -172,7 +195,7 @@ fn clumsy_star(city: &City, start: usize, goal: usize) -> usize {
             if let Some(a) = dist.get_mut(&(next.1.clone(), next.0)) {   
                 if *a > next_cost {
                     let mut new_step = Step {
-                        d: next.1,
+                        d: next.1.clone(),
                         visited: step.visited.clone(),
                         cost: next_cost,
                         position: next.0,
@@ -180,6 +203,7 @@ fn clumsy_star(city: &City, start: usize, goal: usize) -> usize {
                     new_step.visited.push(next.0);
                     paths.push(Reverse(new_step));
                     *a = next_cost;
+                    dist.insert((next.1, next.0), next_cost);
                 }
             } else {
                 let mut new_step = Step {
@@ -197,6 +221,7 @@ fn clumsy_star(city: &City, start: usize, goal: usize) -> usize {
     }
     #[cfg(test)]
     println!("{:#?}: {}", shortest_path, lowest_cost);
+    println!("Time elapsed: {} ms", now.elapsed().as_millis());
     lowest_cost
 }
 
@@ -289,5 +314,21 @@ mod test {
         let input = include_str!("testinput.txt");
         let city = City::from(&input[..]);
         assert_eq!(clumsy_star(&city, 0, city.goal), 102);
+    }
+
+    #[test]
+    fn hashtest() {
+        let input = "94128\n29182\n12345\n93885\n22841";
+        let city = City::from(input);
+        let answer = clumsy_star(&city, 0, city.goal);
+        assert_eq!(1, 0);
+    }
+
+    #[test]
+    fn longtest() {
+        let input = include_str!("smallinput.txt");
+        let city = City::from(&input[..]);
+        let answer = clumsy_star(&city, 0, city.goal);
+        println!("{}", answer);
     }
 }
