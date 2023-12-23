@@ -339,7 +339,46 @@ fn press_button_and_observe(bc: Rc<RefCell<Module>>, all_modules: HashMap<String
     let mut last_nr = String::new();
     let mut last_nr_change = 0;
     let mut max_ones = 0;
-    let mut conjunction_levels = vec![Rc::clone(all_modules.get("nr").unwrap())];
+    let mut conjunction_levels = vec![vec![Rc::clone(all_modules.get("nr").unwrap())]];
+
+    while conjunction_levels.last().unwrap().len() > 0 {
+        conjunction_levels.push(
+            conjunction_levels.last().unwrap().iter().flat_map(|clt| {
+                clt.borrow().senders.iter().filter_map(|nrs| {
+                    if nrs.upgrade().unwrap().borrow().mtype == ModuleType::Conjunction {
+                        Some(Rc::clone(&nrs.upgrade().unwrap()))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<Rc<RefCell<Module>>>>()
+            })
+            .collect()
+        );
+    }
+    conjunction_levels.remove(conjunction_levels.len() - 1);
+
+    #[cfg(test)]
+    conjunction_levels.iter().for_each(|cl| {
+        println!("{:?}", cl.iter().map(|clm| clm.borrow().mtype).collect::<Vec<ModuleType>>());
+    });
+
+    conjunction_levels.push(
+        conjunction_levels.last().unwrap().iter().flat_map(|clt| {
+            clt.borrow().senders.iter().map(|nrs| {
+                Rc::clone(&nrs.upgrade().unwrap())
+            })
+            .collect::<Vec<Rc<RefCell<Module>>>>()
+        })
+        .collect()
+    );
+
+    #[cfg(test)]
+    conjunction_levels.iter().for_each(|cl| {
+        println!("{:?}", cl.iter().map(|clm| clm.borrow().mtype).collect::<Vec<ModuleType>>());
+    });
+
+    #[cfg(test)]
     let all_conjunctions: Vec<Rc<RefCell<Module>>> = all_modules.values().filter_map(|am| {
         if am.borrow().mtype == ModuleType::Conjunction {
             Some(Rc::clone(&am))
@@ -349,22 +388,8 @@ fn press_button_and_observe(bc: Rc<RefCell<Module>>, all_modules: HashMap<String
     })
     .collect();
 
-    let conjunction_dependents: Vec<(String, Rc<RefCell<Module>>, usize)> = all_modules.iter().filter_map(|am| {
-        if am.1.borrow().receivers.iter().all(|s| {
-            s.borrow().mtype == ModuleType::Conjunction
-        }) {
-            Some((am.0.clone(), Rc::clone(&am.1), am.1.borrow().receivers.len()))
-        } else {
-            None
-        }
-    })
-    .collect();
+    println!("test: {}", conjunction_levels.len());
 
-    conjunction_dependents.iter().for_each(|cd| {
-        println!("{}: {:?}\n\n", cd.0, (cd.1.borrow().mtype, cd.2))
-    });
-
-    std::process::exit(0);
     println!("{}", all_modules.len());
     while !end{
         presses += 1;
@@ -372,9 +397,30 @@ fn press_button_and_observe(bc: Rc<RefCell<Module>>, all_modules: HashMap<String
         let mut activated_modules = VecDeque::from([Rc::clone(&bc)]);
         while let Some(m) = activated_modules.pop_front() {
             let mut m = m.borrow_mut();
-            if m.mtype == ModuleType::Observed &&
-                !m.received_signals.iter().all(|s| s == &Pulse::High) {
+            if m.mtype == ModuleType::Observed {
+                //TESTTESTTESTTEST                                      TESTTESTTEST
+                let mut flag = false;
+                let conjunction_str = conjunction_levels.iter().enumerate().map(|(idx, cl)| {
+                    let s = cl.iter().map(|clm| {
+                        if clm.borrow().next_signal.unwrap_or(Pulse::Low) == Pulse::High {
+                            '1'
+                        } else {
+                            '0'
+                        }
+                    }).collect::<String>() + " ";
+                    if idx < 3 && ["", "0000", "1111", "1"].contains(&&s[..]) {
+                    //if true {
+                        flag = true;
+                    }
+                    s
+                })
+                .collect::<String>();
+                if flag {
+                    println!("{:?} at press: {}", conjunction_str, presses);
+                }
+                if !m.received_signals.iter().all(|s| s == &Pulse::High) {
                     end = true;
+                }
             }
             m.process_signals();
             #[cfg(test)]
@@ -395,6 +441,7 @@ fn press_button_and_observe(bc: Rc<RefCell<Module>>, all_modules: HashMap<String
         //})
         //.collect::<String>();
 
+        #[cfg(test)]
         let new_combination = all_modules.get("nr").unwrap().borrow().senders
             .iter().map(|s| {
                 s.upgrade().unwrap().borrow().senders.iter().filter_map(|ss| {
@@ -436,6 +483,7 @@ fn press_button_and_observe(bc: Rc<RefCell<Module>>, all_modules: HashMap<String
         //println!("{}", new_combination);
 
         let mut match_count = 0;
+        #[cfg(test)]
         new_combination.split_whitespace().enumerate().for_each(|(idx, nc)| {
             if nc.chars().all(|ch| ch == '0') {
                 match_count += 1;
@@ -453,7 +501,9 @@ fn press_button_and_observe(bc: Rc<RefCell<Module>>, all_modules: HashMap<String
                 }
             }
         });
-        //#[cfg(test)]
+
+        
+        #[cfg(test)]
         if !combinations.contains(&new_combination) {
             #[cfg(test)]
             if ones > max_ones {
