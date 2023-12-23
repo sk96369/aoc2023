@@ -1,6 +1,6 @@
-use std::{time::Instant, collections::BinaryHeap, ops::{Deref, DerefMut}, cmp::Ordering};
+use std::{time::Instant, collections::HashMap, ops::{Deref, DerefMut}, cmp::Ordering};
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash)]
 enum Direction {
     Up,
     Right,
@@ -98,10 +98,10 @@ impl Ord for NodeWeight {
 }
 
 impl TrailMap {
-    fn bfs(&self, slippery: bool) -> Vec<BinaryHeap<NodeWeight>> {
+    fn bfs(&self, slippery: bool) -> HashMap<(Direction, usize), usize> {
         use Node::*;
 
-        let mut all_costs: Vec<BinaryHeap<NodeWeight>> = vec![BinaryHeap::new();self.len()];
+        let mut all_costs: HashMap<(Direction, usize), usize> = HashMap::new();
         let mut all_trails = vec![vec![(1)];self.len()];
         let mut iterations = 0;
         while let Some(trail) = all_trails.pop() {
@@ -113,42 +113,38 @@ impl TrailMap {
                     if !trail.contains(&n) {
                         let mut new_trail = trail.clone();
                         if let Slope(x) = self[n] {
-                            if slippery || Direction::from((*trail.last().unwrap(), n)) == x {
-                                //println!("testaaaaaa");
-                                new_trail.push(n);
-                                let mut add_new = true;
-                                all_costs[n].retain(|val| {
-                                    if val.d == Some(x) {
-                                        if val.weight >= new_trail.len() {
-                                            println!("at {:?} retained {:?} vs {:?}", (n % self.xlen, n / self.xlen), val, (new_trail.len(), x)); 
-                                            add_new = false;
-                                            true
-                                        } else {
-                                            println!("removed {:?} vs {:?}", val, (new_trail.len(), x)); 
-                                            add_new = true;
-                                            false
-                                        }
+                            let current_dir = Direction::from((*trail.last().unwrap(), n));
+                            if !slippery || current_dir == x {
+                                //println!("is slippery: {}", slippery);
+                                if let Some(old_cost) = all_costs.get_mut(&(current_dir, n)) {
+                                    if *old_cost < new_trail.len() {
+                                        *old_cost = new_trail.len();
+                                        Some(new_trail)
+                                    } else {
+                                        None
                                     }
-                                    else {
-                                        true
-                                    }
-                                });
-                                if add_new {
-                                    all_costs[n].push(NodeWeight { weight: new_trail.len(), d: Some(x)});
-                                    Some(new_trail)
                                 } else {
-                                    None
+                                    all_costs.insert((current_dir, n), new_trail.len());
+                                    Some(new_trail)
                                 }
                             } else {
-                                all_costs[n].push(NodeWeight { weight: new_trail.len(), d: Some(x) });
                                 Some(new_trail)
                             }
+                        } else if n == self.len() - 2 {
+                            if let Some(old_cost) = all_costs.get_mut(&(Direction::Down, n)) {
+                                if *old_cost < new_trail.len() {
+                                    *old_cost = new_trail.len();
+                                }
+                            } else {
+                                all_costs.insert((Direction::Down, n), new_trail.len());
+                            }
+                            None
                         } else {
-                            all_costs[n].push(NodeWeight {weight: new_trail.len(), d:None});
                             new_trail.push(n);
                             Some(new_trail)
                         }
                     } else {
+                        println!("trail {:?} already contains {}", trail, n);
                         None
                     }
                 }).collect();
@@ -156,7 +152,7 @@ impl TrailMap {
                 all_trails.append(&mut neighbors);
             }
             if iterations % 1000 == 0 {
-                println!("trails: {}", all_trails.len());
+                println!("slopes: {:?}", all_costs);
             }
         }
         all_costs
@@ -210,17 +206,16 @@ impl DerefMut for TrailMap {
     }
 }
 
-
 fn solve_1(input: &str) -> usize {
     let trailmap = TrailMap::from(input);
-    let mut costs = trailmap.bfs(true);
-    costs[trailmap.len() - 2].pop().unwrap().weight
+    let costs = trailmap.bfs(true);
+    *costs.get(&(Direction::Down, trailmap.len() - 2)).unwrap()
 }
 
 fn solve_2(input: &str) -> usize {
     let trailmap = TrailMap::from(input);
-    let mut costs = trailmap.bfs(false);
-    costs[trailmap.len() - 2].pop().unwrap().weight
+    let costs = trailmap.bfs(false);
+    *costs.get(&(Direction::Down, trailmap.len() - 2)).unwrap()
 }
 
 fn main() {
