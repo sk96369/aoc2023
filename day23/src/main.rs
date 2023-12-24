@@ -113,10 +113,16 @@ struct ForestGraph {
 
 impl ForestGraph {
     fn find_longest_trail_len(&self) -> usize {
+        let now = Instant::now();
         let mut max_cost = 0;
         let mut max_cost_trail = vec![];
         let mut all_trails = vec![(vec![self.start], 0_usize)];
+        let mut iter_counter = 0;
         while let Some(trail) = all_trails.pop() {
+            iter_counter += 1;
+            if iter_counter % 10000 == 0 {
+                println!("Trails left at {} milliseconds: {}", now.elapsed().as_millis(), all_trails.len());
+            };
             if !(trail.0.last().unwrap() == &self.goal) {
                 let mut neighbors = self.adj_list.get(trail.0.last().unwrap()).unwrap()
                     .iter()
@@ -134,6 +140,7 @@ impl ForestGraph {
                 all_trails.append(&mut neighbors);
             } else {
                 if trail.1 > max_cost {
+                    println!("New longest path found at {} milliseconds", now.elapsed().as_millis());
                     max_cost = trail.1;
                     max_cost_trail = trail.0;
                 }
@@ -166,52 +173,58 @@ impl From<&TrailMap> for ForestGraph {
                 if _counter % 1000 == 0 {
                     println!("counter- fg.len(): {}", fg.adj_list.len());
                 }
-                //println!("{:?}", trail);
                 let current = trail.last().unwrap();
-                //println!("{:?}", trail);
                 let neighbors = input.get_available_paths(&current, false);
-                let mut neighbors: Vec<Vec<usize>> = neighbors.into_iter()
-                    .filter_map(|n| {
-                        if !trail.contains(&n) {
+                if !(trail.len() > 1 && neighbors.iter().filter(|n| {
+                    if let Node::Slope(_) = input[**n] {
+                        true
+                    } else {
+                        false
+                    }
+                }).count() > 2) {
+                    let mut neighbors: Vec<Vec<usize>> = neighbors.into_iter()
+                        .filter_map(|n| {
                             let mut new_trail = trail.clone();
                             new_trail.push(n);
-                            if let Node::Slope(_) = input[n] {
-                                if !checked_points.contains(&n) {
-                                    checked_points.push(n);
-                                    new_trails.push(vec![n]);
-                                }
-
-                                all_costs.entry((trail[0], *new_trail.last().unwrap()))
-                                    .and_modify(|val| {
-                                        if *val < trail.len() {
-                                            *val = trail.len();
-                                        }
-                                    })
-                                .or_insert( {
-                                    trail.len()
-                                });
-                                None
-                            } else if n == end {
-                                all_costs.entry((trail[0], *new_trail.last().unwrap()))
-                                    .and_modify(|val| {
-                                        if *val < new_trail.len() {
-                                            *val = new_trail.len();
-                                        }
-                                    })
+                            if n == end {
+                            all_costs.entry((trail[0], n))
+                                .and_modify(|val| {
+                                    if *val < new_trail.len() {
+                                        *val = new_trail.len();
+                                    }
+                                })
                                 .or_insert( {
                                     trail.len()
                                 });
                                 None
                             } else {
-                                Some(new_trail)
+                                if !trail.contains(&n) {
+                                    Some(new_trail)
+                                } else {
+                                   None
+                                }
                             }
-                        } else {
-                            None
-                        }
-                    }).collect();
-                if !neighbors.is_empty() {
-                    all_trails.append(&mut neighbors);
+                        })
+                    .collect();
+                    if !neighbors.is_empty() {
+                        all_trails.append(&mut neighbors);
+                    }
+                } else {
+                    if !checked_points.contains(&current) {
+                        checked_points.push(*current);
+                        new_trails.push(vec![*current]);
+                    }
+                    all_costs.entry((trail[0], *current))
+                        .and_modify(|val| {
+                            if *val < trail.len() - 1 {
+                                *val = trail.len() - 1;
+                            }
+                        })
+                        .or_insert( {
+                            trail.len() - 1
+                        });
                 }
+
             }
             if graphs_to_be_found {
                 let mut added_new = false;
@@ -243,6 +256,7 @@ impl From<&TrailMap> for ForestGraph {
                 all_trails.append(&mut new_trails);
             }
         }
+        println!("{:#?}", fg);
         fg
     }
 }
@@ -259,7 +273,6 @@ impl TrailMap {
         while let Some(trail) = all_trails.pop() {
             iterations += 1;
             let current = trail.0.last().unwrap();
-            //println!("{:?}", trail);
             let neighbors = self.get_available_paths(&current, slippery);
             let mut neighbors: Vec<(Vec<usize>, String)> = neighbors.into_iter()
                 .filter_map(|n| {
@@ -270,7 +283,6 @@ impl TrailMap {
                             new_trail.1 += &n.to_string();
                             let current_dir = Direction::from((*trail.0.last().unwrap(), n));
                             if !slippery || current_dir == x {
-                                //println!("is slippery: {}", slippery);
                                 if let Some(old_cost) = all_costs.get_mut(&(new_trail.1.clone(), n)) {
                                     if *old_cost < new_trail.0.len() {
                                         *old_cost = new_trail.0.len();
@@ -298,7 +310,6 @@ impl TrailMap {
                             Some(new_trail)
                         }
                     } else {
-                        //println!("trail {:?} already contains {}", trail, n);
                         None
                     }
                 }).collect();
@@ -368,9 +379,12 @@ fn solve_1(input: &str) -> usize {
 }
 
 fn solve_2(input: &str) -> usize {
+    let now = Instant::now();
     let trailmap = TrailMap::from(input);
     let fg = ForestGraph::from(&trailmap);
-    fg.find_longest_trail_len()
+    let output = fg.find_longest_trail_len();
+    println!("Time taken for part 2: {} milliseconds", now.elapsed().as_millis());
+    output
 }
 
 fn main() {
