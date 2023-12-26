@@ -15,35 +15,55 @@ impl Graph {
                 edges.append(&mut self.get(&e.b).unwrap().clone());
             }
         }
+        #[cfg(test)]
+        println!("{:?}", nodes);
         nodes
     }
 
     fn get_dfs_parameters(&self, n: usize) -> (usize, Vec<String>, HashMap<String, Vec<String>>) {
         let path = vec![self.values().next().unwrap().first().unwrap().a.clone()];
-        let mut hm = HashMap::new();
-        self.get(&path[0]).unwrap().iter().for_each(|e| {
-            hm.insert(e.b.clone(), vec![e.a.to_string()]);
-            ()
-        });
+        let hm = HashMap::new();
         (n, path, hm)
     }
 
-    fn dfs_bridge_find(&self, n: usize, trail: Vec<String>, neighbors: HashMap<String, Vec<String>>) -> Option<Vec<Edge>> {
-        let next_edges = self.get(trail.last().unwrap()).unwrap();
-        if neighbors.values().map(|val| val.len()).sum::<usize>() > n {
+    fn dfs_bridge_find(&self, n: usize, trail: Vec<String>, neighbors: &HashMap<String, Vec<String>>) -> Option<Vec<Edge>> {
+        let mut found_bridges = false;
+        let mut neighbors = neighbors.clone();
+        let next_edges: Vec<&Edge> = self.get(trail.last().unwrap()).unwrap().iter()
+            .filter_map(|n| {
+                if !trail.contains(&n.b) && !neighbors.contains_key(&n.b) {
+                    neighbors.insert(n.b.clone(), vec![n.a.clone()]);
+                    Some(n)
+                } else {
+                    None
+                }
+            })
+        .collect();
+        let neighbor_count = neighbors.values().map(|val| val.len()).sum::<usize>();
+        //println!("n: {:?}, n_count: {neighbor_count}\n---trail: {trail:?}", neighbors.keys().collect::<Vec<&String>>());
+        if neighbor_count > n {
             let res: Vec<Vec<Edge>> = next_edges.iter().filter_map(|ne| {
-                let mut next_neighbors = neighbors.clone();
-                let mut next_trail = trail.clone();
-                next_neighbors.remove(&ne.b);
-                next_trail.push(ne.b.clone());
-                next_edges.iter().for_each(|nn| {
-                    if nn != ne {
-                        next_neighbors.entry(nn.b.clone())
-                            .and_modify(|val| val.push(ne.a.clone()))
-                            .or_insert(vec![ne.a.clone()]);
-                    }
-                });
-                self.dfs_bridge_find(n, next_trail, next_neighbors)
+                if !found_bridges {
+                    let mut next_neighbors = neighbors.clone();
+                    let mut next_trail = trail.clone();
+                    next_trail.push(ne.b.clone());
+                    next_edges.iter().for_each(|nn| {
+                        if nn != ne && !trail.contains(&nn.b) {
+                            next_neighbors.entry(nn.b.clone())
+                                .and_modify(|val| val.push(ne.a.clone()))
+                                .or_insert(vec![ne.a.clone()]);
+                        }
+                    });
+                    next_neighbors.remove(&ne.b);
+                    let output = self.dfs_bridge_find(n, next_trail, &next_neighbors);
+                    match output {
+                        Some(_) => found_bridges = true,
+                        None => {}
+                    };
+                    output
+                } else {
+                    None
+                }
             })
             .collect();
             if res.is_empty() {
@@ -52,6 +72,7 @@ impl Graph {
                 Some(res[0].clone())
             }
         } else {
+            println!("{}", neighbor_count);
             Some(neighbors.iter().flat_map(|(k, v)| {
                 v.iter().map(|end| {
                     Edge {
@@ -104,7 +125,7 @@ impl DerefMut for Graph {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 struct Edge {
     a: String,
     b: String,
@@ -158,9 +179,11 @@ impl Display for Graph {
 
 fn solve_1(input: &str) -> usize {
     let mut graph = Graph::from(input);
-    println!("{graph}");
+    //println!("{graph}");
     let dfs_parameters = graph.get_dfs_parameters(3);
+    println!("{:?}", dfs_parameters.1);
     let bridges = graph.dfs_bridge_find(dfs_parameters.0, dfs_parameters.1, dfs_parameters.2).unwrap();
+    println!("{}", bridges.len());
     bridges.iter().for_each(|b| graph.remove_connection((&b.a, &b.b)).unwrap());
     graph.traverse(&bridges.last().unwrap().a).len() * graph.traverse(&bridges.last().unwrap().b).len()
 }
